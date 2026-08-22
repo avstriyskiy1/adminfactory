@@ -135,6 +135,21 @@
     <div id="codesTableWrap"><div class="empty">Загрузка...</div></div>
   </div>
 
+  <div class="card" style="border-color:#e05555">
+    <b>⚠️ Обслуживание экономики</b>
+    <div class="sub" style="margin-bottom:8px">
+      Разовая чистка последствий бага с престижем: раньше кристаллы за
+      престиж считались по эксплуатируемой формуле (можно было копить монеты
+      сверх порога перед престижем ради лишних кристаллов). Кнопка ниже
+      обнуляет кристаллы (и lifetime-счётчик кристаллов) ВСЕМ игрокам и
+      сбрасывает купленные за кристаллы скиллы — задним числом невозможно
+      отличить честно заработанные кристаллы от накрученных эксплойтом.
+      Необратимо. Запускать один раз, после того как фикс уже задеплоен.
+    </div>
+    <button style="background:#e05555" onclick="resetCrystalsEconomy()">Обнулить кристаллы и скиллы у ВСЕХ игроков</button>
+    <div id="economyStatus"></div>
+  </div>
+
   <div class="card">
     <b>👤 Управление аккаунтом игрока</b>
     <div class="sub" style="margin-bottom:0">VK ID игрока — можно узнать у самого игрока или в его обращении/жалобе через VK.</div>
@@ -250,6 +265,17 @@ async function adminFetch(path, extra) {
     body: JSON.stringify({ adminKey: ADMIN_KEY, ...extra }),
   });
   return res.json();
+}
+
+async function resetCrystalsEconomy() {
+  if (!confirm('Точно обнулить кристаллы и купленные за них скиллы у ВСЕХ игроков без исключения? Действие необратимо.')) return;
+  if (!confirm('Последнее подтверждение: это затронет КАЖДОГО игрока в базе, даже тех, кто ничего не эксплуатировал. Продолжить?')) return;
+  const statusEl = document.getElementById('economyStatus');
+  statusEl.textContent = 'Выполняется...';
+  const data = await adminFetch('/admin/economy/reset-crystals');
+  statusEl.textContent = data.ok
+    ? `✅ Готово — затронуто игроков: ${data.affectedPlayers}`
+    : `❌ Ошибка: ${data.error || 'неизвестно'}`;
 }
 
 async function refreshCodes() {
