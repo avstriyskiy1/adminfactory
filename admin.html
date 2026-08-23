@@ -135,34 +135,20 @@
     <div id="codesTableWrap"><div class="empty">Загрузка...</div></div>
   </div>
 
-  <div class="card" style="border-color:#e05555">
-    <b>⚠️ Обслуживание экономики</b>
-    <div class="sub" style="margin-bottom:8px">
-      Разовая чистка последствий бага с престижем: раньше кристаллы за
-      престиж считались по эксплуатируемой формуле (можно было копить монеты
-      сверх порога перед престижем ради лишних кристаллов). Кнопка ниже
-      обнуляет кристаллы (и lifetime-счётчик кристаллов) ВСЕМ игрокам и
-      сбрасывает купленные за кристаллы скиллы — задним числом невозможно
-      отличить честно заработанные кристаллы от накрученных эксплойтом.
-      Необратимо. Запускать один раз, после того как фикс уже задеплоен.
-    </div>
-    <button style="background:#e05555" onclick="resetCrystalsEconomy()">Обнулить кристаллы и скиллы у ВСЕХ игроков</button>
-    <div id="economyStatus"></div>
-  </div>
-
   <div class="card">
     <b>👤 Управление аккаунтом игрока</b>
-    <div class="sub" style="margin-bottom:0">VK ID игрока — можно узнать у самого игрока или в его обращении/жалобе через VK.</div>
+    <div class="sub" style="margin-bottom:0">VK ID, ссылка на профиль (vk.com/durov, vk.com/id123456) или @юзернейм — можно узнать у самого игрока или в его обращении/жалобе через VK.</div>
     <div class="row">
       <div>
-        <label>VK ID игрока</label>
-        <input type="text" id="playerUserId" placeholder="123456789" inputmode="numeric">
+        <label>VK ID, ссылка или @юзернейм</label>
+        <input type="text" id="playerUserId" placeholder="123456789, vk.com/durov или @durov">
       </div>
     </div>
     <button onclick="loadPlayer()">Найти</button>
     <div id="playerStatus"></div>
 
     <div id="playerPanel" style="display:none;margin-top:16px">
+      <div class="sub" id="playerResolvedInfo" style="margin-bottom:0"></div>
 
       <div style="border-top:1px solid var(--border);padding-top:14px;margin-top:14px">
         <b style="font-size:13px">Быстрые характеристики</b>
@@ -265,17 +251,6 @@ async function adminFetch(path, extra) {
     body: JSON.stringify({ adminKey: ADMIN_KEY, ...extra }),
   });
   return res.json();
-}
-
-async function resetCrystalsEconomy() {
-  if (!confirm('Точно обнулить кристаллы и купленные за них скиллы у ВСЕХ игроков без исключения? Действие необратимо.')) return;
-  if (!confirm('Последнее подтверждение: это затронет КАЖДОГО игрока в базе, даже тех, кто ничего не эксплуатировал. Продолжить?')) return;
-  const statusEl = document.getElementById('economyStatus');
-  statusEl.textContent = 'Выполняется...';
-  const data = await adminFetch('/admin/economy/reset-crystals');
-  statusEl.textContent = data.ok
-    ? `✅ Готово — затронуто игроков: ${data.affectedPlayers}`
-    : `❌ Ошибка: ${data.error || 'неизвестно'}`;
 }
 
 async function refreshCodes() {
@@ -395,20 +370,23 @@ const ITEM_LABELS = {
 };
 
 async function loadPlayer() {
-  const userId = document.getElementById('playerUserId').value.trim();
+  const query = document.getElementById('playerUserId').value.trim();
   const statusEl = document.getElementById('playerStatus');
   const panel = document.getElementById('playerPanel');
   panel.style.display = 'none';
-  if (!userId) { statusEl.textContent = 'Введи VK ID'; statusEl.className = 'error'; return; }
+  if (!query) { statusEl.textContent = 'Введи VK ID, ссылку или @юзернейм'; statusEl.className = 'error'; return; }
   statusEl.textContent = 'Ищем...';
   statusEl.className = '';
-  const data = await adminFetch('/admin/players/get', { userId });
+  const data = await adminFetch('/admin/players/get', { query });
   if (!data.ok) { statusEl.textContent = 'Ошибка: ' + (data.error || 'неизвестная'); statusEl.className = 'error'; return; }
-  if (!data.exists) { statusEl.textContent = 'Сохранение не найдено — игрок либо не заходил, либо ID неверный'; statusEl.className = 'error'; return; }
+  if (!data.exists) { statusEl.textContent = `Сохранение не найдено (VK ID ${data.userId}) — игрок либо не заходил, либо ID/ссылка неверные`; statusEl.className = 'error'; return; }
   statusEl.textContent = '✅ Найден';
   statusEl.className = 'success';
+  const userId = data.userId;
   currentPlayer = { userId, save: data.save, purchases: data.purchases || {}, invitedCount: data.invitedCount || 0 };
   panel.style.display = 'block';
+  document.getElementById('playerResolvedInfo').textContent =
+    `VK ID: ${userId}` + (data.resolvedName ? ` · ${data.resolvedName}` : '');
   renderPlayerQuickFields();
   renderPlayerItemsGrid();
   document.getElementById('playerRawJson').value = JSON.stringify(data.save, null, 2);
