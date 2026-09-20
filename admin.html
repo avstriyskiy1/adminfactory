@@ -1,0 +1,566 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MegaFactory — Промокоды (админка)</title>
+<style>
+  :root {
+    --bg: #0d1117; --card: #161b22; --border: #30363d; --text: #e6edf3;
+    --muted: #8b949e; --accent: #F0A500; --teal: #00E0B8; --danger: #f85149;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 24px; background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    max-width: 900px; margin-inline: auto;
+  }
+  h1 { font-size: 20px; margin-bottom: 4px; }
+  .sub { color: var(--muted); font-size: 13px; margin-bottom: 24px; }
+  .card {
+    background: var(--card); border: 1px solid var(--border); border-radius: 8px;
+    padding: 16px; margin-bottom: 16px;
+  }
+  label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 4px; margin-top: 10px; }
+  label:first-child { margin-top: 0; }
+  input, select {
+    width: 100%; padding: 8px 10px; background: #0d1117; border: 1px solid var(--border);
+    border-radius: 6px; color: var(--text); font-size: 14px; font-family: inherit;
+  }
+  input:focus, select:focus { outline: none; border-color: var(--accent); }
+  .row { display: flex; gap: 10px; }
+  .row > div { flex: 1; }
+  .checkbox-row { display: flex; align-items: center; gap: 8px; margin-top: 12px; }
+  .checkbox-row input { width: auto; }
+  .checkbox-row label { margin: 0; color: var(--text); font-size: 13px; }
+  button {
+    padding: 9px 18px; border-radius: 6px; border: 1px solid var(--accent);
+    background: transparent; color: var(--accent); font-size: 14px; font-weight: 600;
+    cursor: pointer; font-family: inherit; margin-top: 14px;
+  }
+  button:hover { background: rgba(240,165,0,.1); }
+  button.danger { border-color: var(--danger); color: var(--danger); }
+  button.danger:hover { background: rgba(248,81,73,.1); }
+  button:disabled { opacity: .5; cursor: default; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--border); }
+  th { color: var(--muted); font-weight: 500; font-size: 11px; text-transform: uppercase; }
+  td.code { font-weight: 600; color: var(--accent); }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; }
+  .badge.active { background: rgba(0,224,184,.15); color: var(--teal); }
+  .badge.inactive { background: rgba(139,148,158,.15); color: var(--muted); }
+  .badge.youtuber { background: rgba(255,0,80,.15); color: #ff4d8f; margin-left: 4px; }
+  .badge.expired { background: rgba(248,81,73,.15); color: var(--danger); }
+  .actions { display: flex; gap: 6px; }
+  .actions button { margin: 0; padding: 4px 10px; font-size: 12px; }
+  #status { font-size: 13px; margin-top: 10px; min-height: 18px; }
+  #status.error { color: var(--danger); }
+  #status.success { color: var(--teal); }
+  #loginScreen { max-width: 400px; margin: 80px auto; }
+  #mainScreen { display: none; }
+  .empty { color: var(--muted); font-size: 13px; padding: 20px; text-align: center; }
+  /* Дашборд метрик */
+  .metrics-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; }
+  .metric-tile { background: #0d1117; border: 1px solid var(--border); border-radius: 8px; padding: 12px; }
+  .metric-tile .val { font-size: 22px; font-weight: 700; color: var(--text); }
+  .metric-tile .lbl { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .metric-tile .sub2 { font-size: 10px; color: var(--muted); margin-top: 4px; }
+  .metrics-note { font-size: 11px; color: var(--muted); margin-top: 10px; line-height: 1.5; }
+</style>
+</head>
+<body>
+
+<div id="loginScreen">
+  <h1>🎟️ Промокоды MegaFactory</h1>
+  <div class="sub">Панель администратора</div>
+  <div class="card">
+    <label>Адрес воркера (без /submit-score)</label>
+    <input type="text" id="workerUrl" placeholder="https://megafactory-xxxxxx.dada-tuda.ru">
+    <label>Ключ администратора</label>
+    <input type="password" id="adminKey" placeholder="ADMIN_KEY">
+    <button onclick="login()">Войти</button>
+    <div id="loginStatus" style="color:var(--danger);font-size:13px;margin-top:10px;"></div>
+  </div>
+</div>
+
+<div id="mainScreen">
+  <h1>🎟️ Промокоды MegaFactory</h1>
+  <div class="sub">Панель администратора · <a href="#" onclick="logout();return false;" style="color:var(--muted)">выйти</a></div>
+
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center">
+      <b>📊 Метрики</b>
+      <button onclick="loadMetrics()" style="margin:0;padding:6px 12px;font-size:12px">🔄 Обновить</button>
+    </div>
+    <div id="metricsGrid" class="metrics-grid" style="margin-top:12px"><div class="empty">Загрузка...</div></div>
+    <div class="metrics-note">
+      DAU/WAU/MAU — по last_seen из player_meta (обновляется при каждом сохранении). Конверсия — доля игроков хоть с одной покупкой (таблица purchases) от общего числа сохранений. D1/D7/D30 — retention по когортам первого захода (first_seen); для игроков, заведённых ДО обновления с этой метрикой, first_seen подставлен задним числом и занижает их реальный retention.
+    </div>
+  </div>
+
+  <div class="card">
+    <b>Новый промокод</b>
+    <div class="row">
+      <div>
+        <label>Код</label>
+        <input type="text" id="newCode" placeholder="SUMMER2026" maxlength="32">
+      </div>
+      <div>
+        <label>Тип награды</label>
+        <select id="newRewardType" onchange="onRewardTypeChange()">
+          <option value="coins">Монеты</option>
+          <option value="crystals">Кристаллы 💎</option>
+          <optgroup label="Донат — разовые (навсегда)">
+            <option value="starterPack">Стартовый набор</option>
+            <option value="vipStatus">VIP-статус</option>
+            <option value="secretLab">Секретная лаборатория (цех)</option>
+            <option value="autoPilot">Автопилот завода</option>
+            <option value="themeAurora">Тема «Аврора»</option>
+            <option value="themeMagma">Тема «Магма»</option>
+          </optgroup>
+          <optgroup label="Эксклюзивы сезонного пропуска (навсегда)">
+            <option value="themeChampion">Тема «Чемпион сезона»</option>
+            <option value="seasonExclusiveMachine">Сезонный цех</option>
+          </optgroup>
+          <optgroup label="Сезонный пропуск">
+            <option value="seasonPass">Премиум-трек (только текущий сезон)</option>
+          </optgroup>
+        </select>
+      </div>
+    </div>
+    <div class="row">
+      <div id="rewardValueWrap">
+        <label>Количество</label>
+        <input type="number" id="newRewardValue" placeholder="1000" min="0">
+      </div>
+      <div>
+        <label>Лимит активаций (пусто = без лимита)</label>
+        <input type="number" id="newMaxActivations" placeholder="без лимита" min="1">
+      </div>
+    </div>
+    <label>Срок действия (пусто = бессрочно)</label>
+    <input type="datetime-local" id="newExpiresAt">
+    <div class="checkbox-row">
+      <input type="checkbox" id="newYoutuber">
+      <label for="newYoutuber">Блогерский промокод (игрок может активировать только один такой код за всё время, независимо от того какой именно)</label>
+    </div>
+    <button onclick="createCode()">Создать промокод</button>
+    <div id="status"></div>
+  </div>
+
+  <div class="card">
+    <b>Существующие промокоды</b>
+    <div id="codesTableWrap"><div class="empty">Загрузка...</div></div>
+  </div>
+
+  <div class="card">
+    <b>👤 Управление аккаунтом игрока</b>
+    <div class="sub" style="margin-bottom:0">VK ID, ссылка на профиль (vk.com/durov, vk.com/id123456) или @юзернейм — можно узнать у самого игрока или в его обращении/жалобе через VK.</div>
+    <div class="row">
+      <div>
+        <label>VK ID, ссылка или @юзернейм</label>
+        <input type="text" id="playerUserId" placeholder="123456789, vk.com/durov или @durov">
+      </div>
+    </div>
+    <button onclick="loadPlayer()">Найти</button>
+    <div id="playerStatus"></div>
+
+    <div id="playerPanel" style="display:none;margin-top:16px">
+      <div class="sub" id="playerResolvedInfo" style="margin-bottom:0"></div>
+
+      <div style="border-top:1px solid var(--border);padding-top:14px;margin-top:14px">
+        <b style="font-size:13px">Быстрые характеристики</b>
+        <div id="playerQuickFields" style="margin-top:8px"></div>
+      </div>
+
+      <div style="border-top:1px solid var(--border);padding-top:14px;margin-top:16px">
+        <b style="font-size:13px">Предметы и разовые покупки</b>
+        <div class="sub" style="margin-bottom:0">Выдать/забрать напрямую, в обход оплаты — для компенсаций, поддержки, тестирования.</div>
+        <div id="playerItemsGrid" style="margin-top:8px"></div>
+      </div>
+
+      <div style="border-top:1px solid var(--border);padding-top:14px;margin-top:16px">
+        <b style="font-size:13px">Сырое сохранение (продвинутый режим)</b>
+        <div class="sub" style="margin-bottom:0">Полный JSON сохранения — можно поправить любое поле, которого нет в быстрых характеристиках. Осторожно: если сломать структуру, игра у игрока может перестать загружаться.</div>
+        <textarea id="playerRawJson" style="width:100%;min-height:220px;margin-top:8px;background:#0d1117;border:1px solid var(--border);border-radius:6px;color:var(--text);font-family:ui-monospace,monospace;font-size:12px;padding:10px"></textarea>
+        <button onclick="savePlayerRawJson()">💾 Сохранить сырой JSON</button>
+        <div id="playerRawStatus"></div>
+      </div>
+
+      <div style="border-top:1px solid var(--danger);padding-top:14px;margin-top:16px">
+        <b style="font-size:13px;color:var(--danger)">Опасная зона</b>
+        <div class="sub" style="margin-bottom:0">Необратимо удаляет сохранение, все покупки, статистику приглашений и рейтинга для этого игрока.</div>
+        <button class="danger" onclick="deletePlayer()">🗑️ Удалить аккаунт полностью</button>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script>
+let WORKER_URL = '';
+let ADMIN_KEY = '';
+
+const REWARD_LABELS = {
+  coins: 'Монеты', crystals: 'Кристаллы 💎', starterPack: 'Стартовый набор',
+  vipStatus: 'VIP-статус', secretLab: 'Секретная лаборатория', autoPilot: 'Автопилот завода',
+  themeAurora: 'Тема «Аврора»', themeMagma: 'Тема «Магма»', themeChampion: 'Тема «Чемпион сезона»',
+  seasonExclusiveMachine: 'Сезонный цех', seasonPass: 'Премиум-трек сезона',
+};
+// Только эти типы наград реально используют числовое "Количество" —
+// у остальных это разовый флаг ("выдан" / "не выдан"), поле для них просто
+// скрываем, чтобы не вводило в заблуждение.
+const NUMERIC_REWARD_TYPES = ['coins', 'crystals'];
+
+function onRewardTypeChange() {
+  const type = document.getElementById('newRewardType').value;
+  document.getElementById('rewardValueWrap').style.display = NUMERIC_REWARD_TYPES.includes(type) ? '' : 'none';
+}
+
+window.addEventListener('DOMContentLoaded', () => {
+  const savedUrl = localStorage.getItem('mf_admin_worker_url');
+  const savedKey = localStorage.getItem('mf_admin_key');
+  if (savedUrl) document.getElementById('workerUrl').value = savedUrl;
+  if (savedKey) document.getElementById('adminKey').value = savedKey;
+  if (savedUrl && savedKey) login();
+  onRewardTypeChange();
+});
+
+async function login() {
+  WORKER_URL = document.getElementById('workerUrl').value.trim().replace(/\/$/, '');
+  ADMIN_KEY = document.getElementById('adminKey').value.trim();
+  const statusEl = document.getElementById('loginStatus');
+  if (!WORKER_URL || !ADMIN_KEY) {
+    statusEl.textContent = 'Заполни оба поля';
+    return;
+  }
+  statusEl.textContent = 'Проверяем...';
+  try {
+    const res = await fetch(WORKER_URL + '/admin/codes/list', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ adminKey: ADMIN_KEY }),
+    });
+    const data = await res.json();
+    if (!res.ok || !data.ok) {
+      statusEl.textContent = data.error === 'unauthorized' ? 'Неверный ключ администратора' : 'Ошибка: ' + (data.error || res.status);
+      return;
+    }
+    localStorage.setItem('mf_admin_worker_url', WORKER_URL);
+    localStorage.setItem('mf_admin_key', ADMIN_KEY);
+    document.getElementById('loginScreen').style.display = 'none';
+    document.getElementById('mainScreen').style.display = 'block';
+    renderCodes(data.codes);
+    loadMetrics();
+  } catch (e) {
+    statusEl.textContent = 'Не удалось подключиться — проверь адрес воркера';
+  }
+}
+
+async function loadMetrics() {
+  const el = document.getElementById('metricsGrid');
+  el.innerHTML = '<div class="empty">Загрузка...</div>';
+  const data = await adminFetch('/admin/metrics');
+  if (!data.ok) { el.innerHTML = '<div class="empty">Ошибка загрузки метрик</div>'; return; }
+  const m = data.metrics;
+  const pctStr = (v) => v == null ? '—' : v + '%';
+  const tiles = [
+    ['Всего игроков', m.totalPlayers],
+    ['DAU', m.dau], ['WAU', m.wau], ['MAU', m.mau],
+    ['Новых сегодня', m.newToday], ['Новых за неделю', m.newWeek],
+    ['Платили хоть раз', m.payers, `конверсия ${pctStr(m.conversionPct)}`],
+    ['Платежей сегодня', m.ordersToday], ['Платежей всего', m.ordersTotal],
+    ['Промокодов сегодня', m.promoToday], ['Промокодов всего', m.promoTotal],
+    ['Подарков друзьям', m.giftsTotal],
+    ['D1 retention', pctStr(m.d1RetentionPct), `когорта: ${m.d1Cohort}`],
+    ['D7 retention', pctStr(m.d7RetentionPct), `когорта: ${m.d7Cohort}`],
+    ['D30 retention', pctStr(m.d30RetentionPct), `когорта: ${m.d30Cohort}`],
+    ['Среднее монет за всё время', fmtNum(m.avgLifetimeCoins)],
+    ['Среднее продано товара', fmtNum(m.avgSold)],
+  ];
+  el.innerHTML = tiles.map(([lbl, val, sub2]) => `
+    <div class="metric-tile">
+      <div class="val">${val != null ? val : '—'}</div>
+      <div class="lbl">${lbl}</div>
+      ${sub2 ? `<div class="sub2">${sub2}</div>` : ''}
+    </div>`).join('');
+}
+
+function fmtNum(n) {
+  if (n == null || isNaN(n)) return '—';
+  if (n >= 1e9) return (n/1e9).toFixed(1) + 'B';
+  if (n >= 1e6) return (n/1e6).toFixed(1) + 'M';
+  if (n >= 1e3) return (n/1e3).toFixed(1) + 'K';
+  return String(n);
+}
+
+function logout() {
+  localStorage.removeItem('mf_admin_worker_url');
+  localStorage.removeItem('mf_admin_key');
+  location.reload();
+}
+
+async function adminFetch(path, extra) {
+  const res = await fetch(WORKER_URL + path, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ adminKey: ADMIN_KEY, ...extra }),
+  });
+  return res.json();
+}
+
+async function refreshCodes() {
+  const data = await adminFetch('/admin/codes/list');
+  if (data.ok) renderCodes(data.codes);
+}
+
+function renderCodes(codes) {
+  const wrap = document.getElementById('codesTableWrap');
+  if (!codes || !codes.length) {
+    wrap.innerHTML = '<div class="empty">Промокодов пока нет</div>';
+    return;
+  }
+  const rows = codes.map(c => {
+    const expired = c.expiresAt && Date.now() > c.expiresAt;
+    const exhausted = c.maxActivations != null && c.usedCount >= c.maxActivations;
+    const statusBadge = !c.active
+      ? '<span class="badge inactive">выключен</span>'
+      : expired ? '<span class="badge expired">истёк</span>'
+      : exhausted ? '<span class="badge expired">исчерпан</span>'
+      : '<span class="badge active">активен</span>';
+    const rewardText = REWARD_LABELS[c.rewardType] + (NUMERIC_REWARD_TYPES.includes(c.rewardType) ? ' ×' + c.rewardValue : '');
+    const limitText = c.maxActivations != null ? (c.usedCount + ' / ' + c.maxActivations) : (c.usedCount + ' / ∞');
+    const expiresText = c.expiresAt ? new Date(c.expiresAt).toLocaleString('ru-RU') : '—';
+    return `<tr>
+      <td class="code">${c.code}${c.youtuber ? '<span class="badge youtuber">блогер</span>' : ''}</td>
+      <td>${rewardText}</td>
+      <td>${limitText}</td>
+      <td>${expiresText}</td>
+      <td>${statusBadge}</td>
+      <td class="actions">
+        <button onclick="toggleActive('${c.code}', ${!c.active})">${c.active ? 'Выключить' : 'Включить'}</button>
+        <button class="danger" onclick="deleteCode('${c.code}')">Удалить</button>
+      </td>
+    </tr>`;
+  }).join('');
+  wrap.innerHTML = `<table>
+    <thead><tr><th>Код</th><th>Награда</th><th>Активаций</th><th>Истекает</th><th>Статус</th><th></th></tr></thead>
+    <tbody>${rows}</tbody>
+  </table>`;
+}
+
+async function createCode() {
+  const code = document.getElementById('newCode').value.trim();
+  const rewardType = document.getElementById('newRewardType').value;
+  const rewardValue = document.getElementById('newRewardValue').value;
+  const maxActivations = document.getElementById('newMaxActivations').value;
+  const expiresAtRaw = document.getElementById('newExpiresAt').value;
+  const youtuber = document.getElementById('newYoutuber').checked;
+  const statusEl = document.getElementById('status');
+
+  if (!code) { statusEl.textContent = 'Введи код'; statusEl.className = 'error'; return; }
+
+  const expiresAt = expiresAtRaw ? new Date(expiresAtRaw).getTime() : null;
+
+  statusEl.textContent = 'Создаём...';
+  statusEl.className = '';
+  const data = await adminFetch('/admin/codes/create', {
+    code, rewardType, rewardValue: Number(rewardValue) || 0,
+    maxActivations: maxActivations || null, expiresAt, youtuber,
+  });
+  if (data.ok) {
+    statusEl.textContent = '✅ Промокод создан';
+    statusEl.className = 'success';
+    document.getElementById('newCode').value = '';
+    document.getElementById('newRewardValue').value = '';
+    document.getElementById('newMaxActivations').value = '';
+    document.getElementById('newExpiresAt').value = '';
+    document.getElementById('newYoutuber').checked = false;
+    refreshCodes();
+  } else {
+    const messages = { code_exists: 'Такой код уже существует', invalid_code: 'Некорректный код', invalid_reward_type: 'Некорректный тип награды' };
+    statusEl.textContent = 'Ошибка: ' + (messages[data.error] || data.error);
+    statusEl.className = 'error';
+  }
+}
+
+async function toggleActive(code, active) {
+  await adminFetch('/admin/codes/update', { code, active });
+  refreshCodes();
+}
+
+async function deleteCode(code) {
+  if (!confirm('Удалить промокод ' + code + '?')) return;
+  await adminFetch('/admin/codes/delete', { code });
+  refreshCodes();
+}
+
+// ══════════════════════════════════════════════════════════════════
+// УПРАВЛЕНИЕ АККАУНТАМИ ИГРОКОВ
+// ══════════════════════════════════════════════════════════════════
+
+let currentPlayer = null; // { userId, save, purchases, invitedCount }
+
+// Быстрые характеристики — [подпись, путь до поля в JSON (можно вложенный,
+// через точку), тип]. "number" — обычный инпут с кнопками Установить/
+// Прибавить, "text" — просто текст со значением.
+const PLAYER_QUICK_FIELDS = [
+  ['💰 Монеты',                 'coins',            'number'],
+  ['💎 Кристаллы (текущие)',    'crystals',         'number'],
+  ['💎 Кристаллы (за всё время)','lifetimeCrystals','number'],
+  ['⭐ Число престижей',        'prestigeCount',     'number'],
+  ['✨ Множитель престижа',     'prestigeMult',      'number'],
+  ['🏭 Всего произведено',      'sold',              'number'],
+  ['⚡ Энергия',                'energy',            'number'],
+  ['🔥 Текущий стрик',          'dailyStreak',       'number'],
+  ['🔥 Лучший стрик',           'bestStreak',        'number'],
+  ['👥 Друзей приглашено',      'friendsInvited',    'number'],
+  ['🎫 Очки текущего сезона',   'seasonSP',          'number'],
+];
+
+const ITEM_LABELS = {
+  starterPack: '📦 Стартовый набор', vipStatus: '👑 VIP-статус', secretLab: '🧪 Секретная лаборатория',
+  autoPilot: '🤖 Автопилот завода', themeAurora: '🌌 Тема «Аврора»', themeMagma: '🔥 Тема «Магма»',
+  themeChampion: '🎖️ Тема «Чемпион сезона»', seasonExclusiveMachine: '🏆 Сезонный цех',
+  seasonPass: '🎫 Премиум-трек (текущий сезон)',
+};
+
+async function loadPlayer() {
+  const query = document.getElementById('playerUserId').value.trim();
+  const statusEl = document.getElementById('playerStatus');
+  const panel = document.getElementById('playerPanel');
+  panel.style.display = 'none';
+  if (!query) { statusEl.textContent = 'Введи VK ID, ссылку или @юзернейм'; statusEl.className = 'error'; return; }
+  statusEl.textContent = 'Ищем...';
+  statusEl.className = '';
+  const data = await adminFetch('/admin/players/get', { query });
+  if (!data.ok) { statusEl.textContent = 'Ошибка: ' + (data.error || 'неизвестная'); statusEl.className = 'error'; return; }
+  if (!data.exists) { statusEl.textContent = `Сохранение не найдено (VK ID ${data.userId}) — игрок либо не заходил, либо ID/ссылка неверные`; statusEl.className = 'error'; return; }
+  statusEl.textContent = '✅ Найден';
+  statusEl.className = 'success';
+  const userId = data.userId;
+  currentPlayer = { userId, save: data.save, purchases: data.purchases || {}, invitedCount: data.invitedCount || 0 };
+  panel.style.display = 'block';
+  document.getElementById('playerResolvedInfo').textContent =
+    `VK ID: ${userId}` + (data.resolvedName ? ` · ${data.resolvedName}` : '');
+  renderPlayerQuickFields();
+  renderPlayerItemsGrid();
+  document.getElementById('playerRawJson').value = JSON.stringify(data.save, null, 2);
+  document.getElementById('playerRawStatus').textContent = '';
+}
+
+function renderPlayerQuickFields() {
+  const el = document.getElementById('playerQuickFields');
+  el.innerHTML = PLAYER_QUICK_FIELDS.map(([label, field]) => {
+    const val = getDeepClient(currentPlayer.save, field);
+    return `<div class="row" style="align-items:end;margin-top:8px">
+      <div style="flex:2">
+        <label style="margin-top:0">${label}</label>
+        <input type="text" id="qf_${field}" value="${val != null ? val : 0}">
+      </div>
+      <div style="flex:0 0 auto;display:flex;gap:6px;padding-bottom:1px">
+        <button style="margin-top:0" onclick="adjustPlayerField('${field}','set')">Установить</button>
+        <button style="margin-top:0" onclick="adjustPlayerField('${field}','add')">Прибавить</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function getDeepClient(obj, path) {
+  return path.split('.').reduce((o, k) => (o == null ? o : o[k]), obj);
+}
+
+async function adjustPlayerField(field, mode) {
+  const input = document.getElementById('qf_' + field);
+  const raw = input.value.trim();
+  const value = raw === '' ? 0 : (isNaN(Number(raw)) ? raw : Number(raw));
+  const data = await adminFetch('/admin/players/adjust', { userId: currentPlayer.userId, field, value, mode });
+  if (data.ok) {
+    currentPlayer.save = data.save;
+    document.getElementById('playerRawJson').value = JSON.stringify(data.save, null, 2);
+    renderPlayerQuickFields();
+  } else {
+    alert('Ошибка: ' + (data.error || 'неизвестная'));
+  }
+}
+
+function renderPlayerItemsGrid() {
+  const el = document.getElementById('playerItemsGrid');
+  const save = currentPlayer.save || {};
+  const purchases = currentPlayer.purchases || {};
+  el.innerHTML = Object.keys(ITEM_LABELS).map(item => {
+    let owned;
+    if (item === 'seasonPass') owned = save.seasonPremiumForIndex != null && save.seasonPremiumForIndex === save.seasonIndex;
+    else if (item === 'themeChampion') owned = !!save.seasonExclusiveThemeUnlocked;
+    else if (item === 'seasonExclusiveMachine') owned = !!save.seasonExclusiveMachineUnlocked;
+    else owned = !!purchases[item];
+    return `<div class="row" style="align-items:center;margin-top:8px">
+      <div style="flex:2;font-size:13px">${ITEM_LABELS[item]} ${owned ? '<span class="badge active">есть</span>' : '<span class="badge inactive">нет</span>'}</div>
+      <div style="flex:0 0 auto;display:flex;gap:6px">
+        <button style="margin-top:0" onclick="grantPlayerItem('${item}')" ${owned?'disabled':''}>Выдать</button>
+        <button class="danger" style="margin-top:0" onclick="revokePlayerItem('${item}')" ${owned?'':'disabled'}>Забрать</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function grantPlayerItem(item) {
+  const data = await adminFetch('/admin/players/grant', { userId: currentPlayer.userId, item });
+  if (!data.ok) { alert('Ошибка: ' + (data.error || 'неизвестная')); return; }
+  await loadPlayer(); // перезагружаем целиком — проще, чем аккуратно склеивать частичный ответ
+  document.getElementById('playerUserId').value = currentPlayer.userId;
+}
+
+async function revokePlayerItem(item) {
+  if (!confirm('Забрать «' + ITEM_LABELS[item] + '» у игрока?')) return;
+  const data = await adminFetch('/admin/players/revoke', { userId: currentPlayer.userId, item });
+  if (!data.ok) { alert('Ошибка: ' + (data.error || 'неизвестная')); return; }
+  await loadPlayer();
+  document.getElementById('playerUserId').value = currentPlayer.userId;
+}
+
+async function savePlayerRawJson() {
+  const statusEl = document.getElementById('playerRawStatus');
+  let parsed;
+  try {
+    parsed = JSON.parse(document.getElementById('playerRawJson').value);
+  } catch(e) {
+    statusEl.textContent = 'Некорректный JSON: ' + e.message;
+    statusEl.className = 'error';
+    return;
+  }
+  if (!confirm('Полностью перезаписать сохранение этого игрока присланным JSON? Это необратимо.')) return;
+  statusEl.textContent = 'Сохраняем...';
+  statusEl.className = '';
+  // Сырой JSON целиком передаём одним полем "" (пустой путь = вся корневая
+  // структура) через adjust — сервер просто заменит save целиком на value.
+  const data = await adminFetch('/admin/players/adjust', { userId: currentPlayer.userId, field: '__root__', value: parsed, mode: 'set_root' });
+  if (data.ok) {
+    statusEl.textContent = '✅ Сохранено';
+    statusEl.className = 'success';
+    currentPlayer.save = data.save;
+    renderPlayerQuickFields();
+    renderPlayerItemsGrid();
+  } else {
+    statusEl.textContent = 'Ошибка: ' + (data.error || 'неизвестная');
+    statusEl.className = 'error';
+  }
+}
+
+async function deletePlayer() {
+  if (!confirm('Удалить ВСЁ для игрока ' + currentPlayer.userId + '? Это необратимо — сохранение, покупки, статистика.')) return;
+  if (!confirm('Точно-точно? Отменить не получится.')) return;
+  const data = await adminFetch('/admin/players/delete', { userId: currentPlayer.userId });
+  if (data.ok) {
+    alert('Аккаунт удалён');
+    document.getElementById('playerPanel').style.display = 'none';
+    document.getElementById('playerStatus').textContent = '';
+    document.getElementById('playerUserId').value = '';
+    currentPlayer = null;
+  } else {
+    alert('Ошибка: ' + (data.error || 'неизвестная'));
+  }
+}
+</script>
+</body>
+</html>
